@@ -34,11 +34,29 @@ cd "$SRC_DIR"
 git checkout "$SPDK_COMMIT_ID"
 git submodule update --init
 
-zypper refresh
+# --- START SLES Dependency Fixes (Robust Zypper and Python package resolution) ---
+
+# Retry zypper refresh to ensure repository metadata is current and stable
+for i in {1..5}; do
+    if zypper refresh; then
+        echo "zypper refresh succeeded on attempt $i."
+        break
+    else
+        echo "zypper refresh failed on attempt $i. Retrying in 5 seconds..." >&2
+        sleep 5
+    fi
+done
+
+# Modify SPDK's SLES dependency script to resolve Python package name conflicts/issues
+# 1. Remove 'python3-pyelftools' as it frequently causes "Package not found" errors.
 sed -i '/python3-pyelftools/d' ./scripts/pkgdep/sles.sh
+
+# 2. Change other 'python3-' prefixes to 'python311-' for compatibility with bci-base:15.7
 sed -i 's/python3-/python311-/g' ./scripts/pkgdep/sles.sh
 
-# Install dependencies
+# --- END SLES Dependency Fixes ---
+
+# Install dependencies using the modified SPDK script and pip
 ./scripts/pkgdep.sh --uring
 pip3 install -r ./scripts/pkgdep/requirements.txt
 
